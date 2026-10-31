@@ -5,7 +5,15 @@
 const PEER_PREFIX = 'aman-planning-poker-';
 const COLORS = ['#e53935', '#fb8c00', '#fdd835', '#43a047', '#00acc1', '#1e88e5', '#5e35b1', '#d81b60'];
 const LS_GAMES = 'pp_games_v1', LS_ME = 'pp_me_v1';
-const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+/* STUN finds each player's public address; TURN relays traffic when a direct link is blocked (mobile data, office networks). */
+const PEER_OPTS = { config: { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: 'turn:eu-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
+  { urls: 'turn:us-0.turn.peerjs.com:3478', username: 'peerjs', credential: 'peerjsp' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turns:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
+] }, debug: 1 };
+const JOIN_TIMEOUT_MS = 20000;
+const ALPHABET ='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage full or blocked */ } };
@@ -160,9 +168,11 @@ function startHost(game) {
   session = { role: 'host', game, conns: new Map(), players: new Map(), state: { revealed: false, currentId: null, timerEnd: null }, status: 'Connecting…' };
   session.players.set(me.pid, { name: me.name, vote: null, online: true });
   buildRoom();
-  const peer = new Peer(PEER_PREFIX + game.code);
+  const peer = new Peer(PEER_PREFIX + game.code, PEER_OPTS);
   session.peer = peer;
   peer.on('open', () => { session.status = ''; broadcast(); });
+  // If the link to the signalling server drops, players can no longer find this game until we reconnect.
+  peer.on('disconnected', () => { if (session && session.peer === peer && !peer.destroyed) { session.status = 'Reconnecting…'; updateRoom(); setTimeout(() => { try { peer.reconnect(); } catch { /* destroyed */ } }, 1000); } });
   peer.on('connection', conn => {
     conn.on('data', m => onHostMessage(conn, m));
     conn.on('close', () => { if (conn.pid && session.conns.get(conn.pid) === conn) { session.conns.delete(conn.pid); const p = session.players.get(conn.pid); if (p) p.online = false; broadcast(); } });
@@ -215,12 +225,15 @@ function startGuest(code) {
   closeSession();
   session = { role: 'guest', code, status: 'Connecting to game…', view: null };
   buildRoom();
-  const peer = new Peer();
+  const peer = new Peer(PEER_OPTS);
   session.peer = peer;
+  const fail = msg => { if (session && session.peer === peer && !(session.view)) { session.status = msg; session.failed = true; updateRoom(); } };
+  const timeout = setTimeout(() => fail('Could not connect to the host. Make sure the host still has the game open in their browser. If you are on a work network or VPN, try mobile data or another network.'), JOIN_TIMEOUT_MS);
   peer.on('open', () => {
     const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
     session.conn = conn;
-    conn.on('open', () => { session.status = ''; conn.send({ type: 'join', pid: me.pid, name: me.name }); });
+    conn.on('error', e => fail('Connection problem (' + (e.type || e) + ').'));
+    conn.on('open', () => { clearTimeout(timeout); session.status = 'Joined, waiting for the host…'; session.failed = false; updateRoom(); conn.send({ type: 'join', pid: me.pid, name: me.name }); });
     conn.on('data', m => { if (m && m.type === 'state' && m.view) { session.view = m.view; session.viewAt = Date.now(); session.status = ''; updateRoom(); } });
     conn.on('close', () => { session.status = 'Disconnected: the host has left or lost connection.'; updateRoom(); });
   });
@@ -333,6 +346,7 @@ function updateRoom() {
   if (!session || !session.ui) return;
   const ui = session.ui, v = session.view, isHost = session.role === 'host';
   ui.status.style.display = session.status ? '' : 'none'; ui.status.textContent = session.status || '';
+  if (session.failed && session.role === 'guest') ui.status.append(' ', h('button', { class: 'small', onclick: () => startGuest(session.code) }, 'Try again'));
   if (!v) { ui.title.replaceChildren(); ui.cards.replaceChildren(); return; }
   ui.head.textContent = v.name;
 
