@@ -1,6 +1,6 @@
 # Scrum Poker, Planning Poker
 
-A free, rainbow-coloured scrum poker (planning poker) tool for product owners and agile teams.
+A free, scrum poker (planning poker) tool for product owners and agile teams.
 
 ## 👉 Play it at [AmanTalwar.com](https://amantalwar.com)
 
