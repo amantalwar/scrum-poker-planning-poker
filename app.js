@@ -228,7 +228,7 @@ function startGuest(code) {
   const peer = new Peer(PEER_OPTS);
   session.peer = peer;
   const fail = msg => { if (session && session.peer === peer && !(session.view)) { session.status = msg; session.failed = true; updateRoom(); } };
-  const timeout = setTimeout(() => fail('Could not connect to the host. Make sure the host still has the game open in their browser. If you are on a work network or VPN, try mobile data or another network.'), JOIN_TIMEOUT_MS);
+  const timeout = setTimeout(() => fail('Could not connect to the host. Make sure the host still has the game open in their browser. Players currently need to be on the same Wi-Fi or network as the host, so check you are not on a different network, mobile data or a VPN.'), JOIN_TIMEOUT_MS);
   peer.on('open', () => {
     const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
     session.conn = conn;
@@ -334,6 +334,7 @@ function buildRoom() {
     const link = location.href.split('#')[0] + '#join=' + session.game.code;
     const inp = h('input', { type: 'text', readonly: true, value: link, 'aria-label': 'Invite link', onfocus: e => e.target.select() });
     ui.invite.append(h('p', null, 'Share this link, or give players the code ', h('b', null, session.game.code), '. Keep this tab open while you play: you are the host.'),
+      h('div', { class: 'notice' }, 'Everyone must be on the same Wi-Fi or network as you (and not on a VPN) to join.'),
       h('div', { class: 'invite' }, inp, h('button', { class: 'green', onclick: async e => {
         try { await navigator.clipboard.writeText(link); e.target.textContent = 'Copied!'; } catch { inp.select(); e.target.textContent = 'Press Ctrl+C'; }
         setTimeout(() => { e.target.textContent = 'Copy link'; }, 2000);

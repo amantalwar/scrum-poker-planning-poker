@@ -20,6 +20,7 @@ No sign-up. Create a game, share the invite link, and estimate together.
 ## How it works
 
 The host's browser acts as the game server using [PeerJS](https://peerjs.com) (WebRTC). Players join with a link such as `…/#join=ABC123`.
+**Players currently need to be on the same Wi-Fi or network as the host.** Connecting across different networks is unreliable because there is no dedicated relay server. A hosted real-time database (for example Firebase) would remove this limit.
 The host must keep their tab open while the game is running. Votes are only sent to other players after the host reveals them.
 
 ## Self-hosting
